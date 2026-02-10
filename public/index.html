@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nalid24 Messenger - Privacy-Focused Messaging</title>
+  <meta name="description" content="Secure messaging with 24-hour auto-delete. No phone number, no email, complete privacy.">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #333;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 480px;
+      width: 100%;
+      padding: 48px 32px;
+      text-align: center;
+    }
+    
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      font-weight: bold;
+      color: white;
+    }
+    
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+    
+    .tagline {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 32px;
+    }
+    
+    .features {
+      text-align: left;
+      margin: 32px 0;
+      padding: 24px;
+      background: #f9fafb;
+      border-radius: 16px;
+    }
+    
+    .feature {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: #444;
+    }
+    
+    .feature:last-child {
+      margin-bottom: 0;
+    }
+    
+    .feature-icon {
+      width: 24px;
+      height: 24px;
+      background: #667eea;
+      border-radius: 50%;
+      margin-right: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    
+    .download-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      padding: 16px 48px;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 24px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .download-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+    
+    .download-btn:active {
+      transform: translateY(0);
+    }
+    
+    .version {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #999;
+    }
+    
+    .warning {
+      margin-top: 24px;
+      padding: 16px;
+      background: #fff3cd;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
+    
+    .warning strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    @media (max-width: 480px) {
+      .container {
+        padding: 32px 24px;
+      }
+      
+      h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">N</div>
+    <h1>Nalid24</h1>
+    <p class="tagline">Privacy-focused messaging that disappears</p>
+    
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🔒</div>
+        <div>End-to-end encrypted messages</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⏱️</div>
+        <div>Auto-delete after 24 hours</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">👤</div>
+        <div>No phone number or email required</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📱</div>
+        <div>QR code contact sharing</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🚫</div>
+        <div>No data collection or tracking</div>
+      </div>
+    </div>
+    
+    <a href="https://github.com/r0nw4lk3r070/24/releases/latest/download/app-release.apk" class="download-btn" id="downloadBtn">
+      Download for Android
+    </a>
+    
+    <div class="version">Version 1.0.0 • ~40 MB</div>
+    
+    <div class="warning">
+      <strong>⚠️ Installation Note</strong>
+      You may need to enable "Install from unknown sources" in your Android settings to install this APK.
+    </div>
+  </div>
+  
+  <script>
+    // Track download
+    document.getElementById('downloadBtn').addEventListener('click', function() {
+      console.log('APK download initiated');
+      // In production, you might track this with analytics
+    });
+  </script>
+</body>
+</html>

@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView
+  SafeAreaView,
+  Alert
 } from 'react-native';
 import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import ChatBubble from '../components/ChatBubble';
 import { sendMessage, getMessages, listenForMessages, markAllMessagesAsRead, markMessageAsDelivered } from '../services/firebaseMessageService';
 import { getUser } from '../services/authService';
 import { listenToPresence, formatLastSeen } from '../services/presenceService';
@@ -98,6 +98,33 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ route }) => {
     } catch (error) {
       console.error('Error loading messages:', error);
     }
+  };
+
+  const handleDeleteChat = () => {
+    Alert.alert(
+      'Delete Chat',
+      `Delete all messages with ${contactName}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Import the delete function
+              const { clearMessagesForContact } = await import('../services/messageService');
+              await clearMessagesForContact(contactId);
+              setMessages([]);
+              Alert.alert('Success', 'Chat deleted');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Delete chat error:', error);
+              Alert.alert('Error', 'Failed to delete chat');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleSendMessage = async () => {
@@ -201,6 +228,12 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ route }) => {
             </View>
           )}
         </View>
+        <TouchableOpacity 
+          onPress={handleDeleteChat}
+          style={styles.deleteButton}
+        >
+          <Text style={styles.deleteButtonText}>🗑️</Text>
+        </TouchableOpacity>
       </View>
       
       <KeyboardAvoidingView 
@@ -280,6 +313,16 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  deleteButtonText: {
+    fontSize: 20,
   },
   contactName: {
     fontSize: 16,

@@ -13,11 +13,11 @@ import { useNavigation } from '@react-navigation/native';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 
 const DOWNLOAD_URL = 'https://nalid24-a7401.web.app';
-const GITHUB_URL = 'https://github.com/yourusername/nalid24';
+const GITHUB_URL = 'https://github.com/r0nw4lk3r070/24';
 
 const InviteScreen = () => {
   const navigation = useNavigation();
-  const [showQR, setShowQR] = useState(false);
+  const [showQR, setShowQR] = useState(true); // Show QR by default
 
   const handleShareLink = async () => {
     try {
@@ -48,18 +48,20 @@ const InviteScreen = () => {
 
         {showQR ? (
           <View style={styles.qrSection}>
-            <Text style={styles.qrTitle}>Scan to Download</Text>
+            <Text style={styles.qrTitle}>📱 Download Nalid24</Text>
+            <Text style={styles.qrSubtitle}>Scan to install the app</Text>
             <View style={styles.qrWrapper}>
-              <QRCodeDisplay uniqueId={DOWNLOAD_URL} size={240} />
+              <QRCodeDisplay uniqueId={DOWNLOAD_URL} size={260} raw={true} />
             </View>
             <Text style={styles.qrHint}>
-              Scan this QR code to download Nalid24
+              👆 Scan with any camera app to open download page
             </Text>
+            <Text style={styles.qrUrl}>{DOWNLOAD_URL}</Text>
             <TouchableOpacity 
               style={styles.qrToggleButton} 
               onPress={() => setShowQR(false)}
             >
-              <Text style={styles.qrToggleButtonText}>Hide QR Code</Text>
+              <Text style={styles.qrToggleButtonText}>Show Share Options</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -67,8 +69,8 @@ const InviteScreen = () => {
             <TouchableOpacity style={styles.primaryButton} onPress={handleShowQR}>
               <Text style={styles.buttonIcon}>📱</Text>
               <View style={styles.buttonContent}>
-                <Text style={styles.buttonTitle}>Show QR Code</Text>
-                <Text style={styles.buttonDescription}>Let someone scan to download</Text>
+                <Text style={styles.buttonTitle}>Show Download QR Code</Text>
+                <Text style={styles.buttonDescription}>Display QR to install the app</Text>
               </View>
             </TouchableOpacity>
 
@@ -201,10 +203,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   qrTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 24,
+    color: '#2196F3',
+    marginBottom: 4,
+  },
+  qrSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  qrUrl: {
+    fontSize: 12,
+    color: '#2196F3',
+    marginTop: 8,
+    marginBottom: 12,
+    fontFamily: 'monospace',
   },
   qrWrapper: {
     padding: 16,

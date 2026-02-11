@@ -24,7 +24,7 @@ const GroupChatScreen = () => {
         data={messages}
         renderItem={({ item }: { item: Message }) => (
           <View>
-            <Text>{item.sender}: {item.content}</Text>
+            <Text>{item.senderId}: {item.content}</Text>
           </View>
         )}
         keyExtractor={(item) => item.id}

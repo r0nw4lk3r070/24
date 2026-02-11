@@ -21,7 +21,10 @@
     "@react-native-firebase/messaging": "^19.0.0",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/stack": "^6.3.20",
+    "@types/crypto-js": "^4.2.2",
+    "crypto-js": "^4.2.0",
     "expo": "~50.0.0",
+    "expo-barcode-scanner": "~12.9.3",
     "expo-camera": "~14.0.0",
     "expo-constants": "~15.4.0",
     "expo-crypto": "~12.8.0",
@@ -39,8 +42,6 @@
     "react-native-safe-area-context": "4.8.0",
     "react-native-screens": "~3.29.0",
     "react-native-svg": "14.1.0",
-    "react-native-webrtc": "^118.0.0",
-    "text-encoding": "^0.7.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

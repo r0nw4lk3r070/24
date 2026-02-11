@@ -1,13 +1,15 @@
 import * as Crypto from 'expo-crypto';
+import CryptoJS from 'crypto-js';
 
 /**
  * Encryption Service for Nalid24
  * 
- * Uses AES-256-GCM encryption for message content
- * Google FCM only sees encrypted payload, not message content
+ * Uses AES-256 encryption for message content
+ * Messages are encrypted before being stored in Firebase
+ * Only users with the shared secret can decrypt messages
  */
 
-// Generate a random encryption key (in production, derive from user password or store securely)
+// Generate a random encryption key
 export const generateEncryptionKey = async (): Promise<string> => {
   const randomBytes = await Crypto.getRandomBytesAsync(32); // 256 bits
   return arrayBufferToBase64(randomBytes);
@@ -21,35 +23,17 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return btoa(binary);
 };
 
-// Convert Base64 string to ArrayBuffer
-const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-};
-
 /**
- * Encrypt a message using AES
+ * Encrypt a message using AES-256
  * @param message - Plain text message
- * @param key - Base64 encoded encryption key
- * @returns Base64 encoded encrypted message
+ * @param key - Shared secret key (SHA256 hash)
+ * @returns Encrypted message as string
  */
 export const encryptMessage = async (message: string, key: string): Promise<string> => {
   try {
-    // In a real implementation, use crypto.subtle for AES-GCM
-    // For now, using simple XOR cipher as placeholder
-    // TODO: Implement proper AES-GCM encryption
-    
-    const encrypted = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      message + key
-    );
-    
-    // This is a simplified version - in production use proper encryption
-    return btoa(JSON.stringify({ encrypted, timestamp: Date.now() }));
+    // Use AES-256 encryption with the shared secret
+    const encrypted = CryptoJS.AES.encrypt(message, key).toString();
+    return encrypted;
   } catch (error) {
     console.error('Encryption error:', error);
     throw error;
@@ -57,20 +41,25 @@ export const encryptMessage = async (message: string, key: string): Promise<stri
 };
 
 /**
- * Decrypt a message
- * @param encryptedMessage - Base64 encoded encrypted message
- * @param key - Base64 encoded encryption key
- * @returns Plain text message
+ * Decrypt a message using AES-256
+ * @param encryptedMessage - Encrypted message string
+ * @param key - Shared secret key (SHA256 hash)
+ * @returns Decrypted plain text message
  */
 export const decryptMessage = async (
   encryptedMessage: string,
   key: string
 ): Promise<string> => {
   try {
-    // TODO: Implement proper AES-GCM decryption
-    // This is a placeholder
-    const data = JSON.parse(atob(encryptedMessage));
-    return data.encrypted; // Placeholder
+    // Decrypt using AES-256 with the shared secret
+    const decrypted = CryptoJS.AES.decrypt(encryptedMessage, key);
+    const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+    
+    if (!plaintext) {
+      throw new Error('Decryption failed - invalid key or corrupted data');
+    }
+    
+    return plaintext;
   } catch (error) {
     console.error('Decryption error:', error);
     throw error;
@@ -79,7 +68,7 @@ export const decryptMessage = async (
 
 /**
  * Generate a shared secret between two users (for E2E encryption)
- * In production, use Diffie-Hellman or similar key exchange
+ * Uses deterministic hash so both users get the same key
  */
 export const generateSharedSecret = async (
   userId: string,

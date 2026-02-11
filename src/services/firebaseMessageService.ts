@@ -22,7 +22,8 @@ export const getChatId = (userId1: string, userId2: string): string => {
 export const sendMessage = async (
   myUserId: string,
   contactId: string,
-  messageContent: string
+  messageContent: string,
+  isEmoji: boolean = false
 ): Promise<Message> => {
   try {
     const chatId = getChatId(myUserId, contactId);
@@ -37,7 +38,7 @@ export const sendMessage = async (
       content: messageContent, // Store decrypted locally for display
       senderId: myUserId,
       timestamp: new Date(),
-      isEmoji: false,
+      isEmoji: isEmoji,
       status: 'sending',
     };
     
@@ -143,14 +144,28 @@ export const getMessages = async (
       
       messages.push({
         id: messageId,
-        content: data.encryptedContent, // Will decrypt in UI for now
+        content: data.encryptedContent, // Store encrypted, will decrypt below
         senderId: data.senderId,
         timestamp: new Date(data.timestamp),
         isEmoji: false,
       });
     });
     
-    return messages;
+    // Decrypt all messages
+    const sharedSecret = await generateSharedSecret(myUserId, contactId);
+    const decryptedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        try {
+          const decryptedContent = await decryptMessage(msg.content, sharedSecret);
+          return { ...msg, content: decryptedContent };
+        } catch (error) {
+          console.error('Error decrypting message:', msg.id, error);
+          return msg; // Return with encrypted content if decryption fails
+        }
+      })
+    );
+    
+    return decryptedMessages;
   } catch (error) {
     console.error('Error getting messages from Firebase:', error);
     return [];

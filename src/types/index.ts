@@ -22,3 +22,8 @@ export interface GroupChat {
     members: User[];
     messages: Message[];
 }
+
+export interface Emoji {
+    id: string;
+    symbol: string;
+}

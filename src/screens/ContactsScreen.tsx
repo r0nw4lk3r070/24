@@ -17,6 +17,7 @@ import QRCodeDisplay from '../components/QRCodeDisplay';
 import { getContacts, addContact, removeContact, Contact } from '../services/contactService';
 import { getUser } from '../services/authService';
 import { getFCMToken } from '../services/notificationService';
+import { sendContactRequest, listenForContactRequests } from '../services/contactSyncService';
 
 type ContactsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Contacts'>;
 
@@ -33,7 +34,17 @@ const ContactsScreen = () => {
   useEffect(() => {
     loadData();
     loadFCMToken();
-  }, []);
+
+    // Set up listener for incoming contact requests
+    let cleanup: (() => void) | undefined;
+    if (myUserId) {
+      cleanup = listenForContactRequests(myUserId);
+    }
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [myUserId]);
 
   const loadFCMToken = async () => {
     const token = await getFCMToken();
@@ -94,9 +105,13 @@ const ContactsScreen = () => {
       
       // Add contact with FCM token
       await addContact(scannedId, scannedUsername, scannedFcmToken);
+      
+      // Send bidirectional contact request via Firebase
+      await sendContactRequest(scannedId, scannedUsername, scannedFcmToken);
+      
       await loadData();
       
-      Alert.alert('Success', `Added ${scannedUsername} to your contacts`);
+      Alert.alert('Success', `Added ${scannedUsername} to your contacts\n\nThey will automatically receive your contact info.`);
     } catch (error) {
       console.error('Error adding contact:', error);
       Alert.alert('Error', 'Failed to add contact');

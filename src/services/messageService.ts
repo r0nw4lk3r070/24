@@ -111,6 +111,9 @@ export const clearAllMessagesGlobally = async (): Promise<void> => {
   }
 };
 
+// Alias for chat deletion
+export const clearMessagesForContact = clearAllMessages;
+
 // Message service object
 export const messageService: MessageService = {
   sendMessage,

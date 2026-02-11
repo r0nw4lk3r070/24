@@ -4,32 +4,35 @@ import QRCodeGenerator from 'qrcode-generator';
 
 interface QRCodeDisplayProps {
   uniqueId: string;
+  username?: string;
   fcmToken?: string | null;
   size?: number;
   color?: string;
+  raw?: boolean; // If true, use uniqueId as-is without JSON wrapping
 }
 
-const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ uniqueId, fcmToken, size = 200, color = 'black' }) => {
+const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ uniqueId, username, fcmToken, size = 200, color = 'black', raw = false }) => {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
     generateQR();
-  }, [uniqueId, fcmToken]);
+  }, [uniqueId, username, fcmToken, raw]);
 
   const generateQR = () => {
     try {
       setLoading(true);
       setError('');
       
-      // Create QR code data with both userId and FCM token
-      const qrData = JSON.stringify({
+      // Create QR code data - raw mode for URLs, JSON for contacts
+      const qrData = raw ? uniqueId : JSON.stringify({
         userId: uniqueId,
+        username: username || 'Unknown',
         fcmToken: fcmToken || null,
       });
       
-      console.log('Generating QR code with data:', { userId: uniqueId, hasFcmToken: !!fcmToken });
+      console.log('Generating QR code with data:', { userId: uniqueId, username: username, hasFcmToken: !!fcmToken });
       
       // Create QR code
       const qr = QRCodeGenerator(0, 'M');

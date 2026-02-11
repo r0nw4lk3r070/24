@@ -27,6 +27,7 @@ const ProfileScreen = () => {
   const [user, setUser] = useState<User | null>(null);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [showAppQR, setShowAppQR] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -61,8 +62,13 @@ const ProfileScreen = () => {
             try {
               await clearAllContacts();
               await clearAllMessagesGlobally();
-              Alert.alert('Success', 'All data cleared');
+              // Navigate back to force reload
+              navigation.navigate('Contacts');
+              setTimeout(() => {
+                Alert.alert('Success', 'All data cleared. Please restart the app for full effect.');
+              }, 500);
             } catch (error) {
+              console.error('Clear data error:', error);
               Alert.alert('Error', 'Failed to clear data');
             }
           }
@@ -73,27 +79,33 @@ const ProfileScreen = () => {
 
   const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'This will delete your account and all data. You cannot undo this action.',
+      'Logout & Delete Account',
+      'This will permanently delete your account and all data. You cannot undo this action.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Logout',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('Starting logout and account deletion...');
               // Cleanup presence tracking
-              await cleanupPresence();
+              if (user) {
+                await cleanupPresence();
+              }
               // Clear all data
               await clearAllContacts();
               await clearAllMessagesGlobally();
               await clearUserData();
+              console.log('All data cleared, navigating to Auth...');
+              // Force navigate to Auth screen
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Auth' }],
               });
             } catch (error) {
-              Alert.alert('Error', 'Failed to logout');
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout: ' + error);
             }
           }
         }
@@ -134,6 +146,18 @@ const ProfileScreen = () => {
             <Text style={styles.menuItemText}>Account Age</Text>
             <Text style={styles.menuItemValue}>{accountAge} days</Text>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Share App</Text>
+          
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => navigation.navigate('Invite')}
+          >
+            <Text style={styles.menuItemText}>📱 Share Nalid24 App</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -188,6 +212,31 @@ const ProfileScreen = () => {
             <TouchableOpacity
               style={styles.qrModalButton}
               onPress={() => setShowQR(false)}
+            >
+              <Text style={styles.qrModalButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* App Download QR Modal */}
+      <Modal
+        visible={showAppQR}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowAppQR(false)}
+      >
+        <View style={styles.qrModalOverlay}>
+          <View style={styles.qrModalContent}>
+            <Text style={styles.qrModalTitle}>📱 Download Nalid24</Text>
+            <Text style={styles.qrModalSubtitle}>Scan to install the app</Text>
+            <QRCodeDisplay uniqueId="https://nalid24-a7401.web.app" size={260} raw={true} />
+            <Text style={styles.qrModalHint}>
+              Anyone can scan this to download the app
+            </Text>
+            <TouchableOpacity
+              style={styles.qrModalButton}
+              onPress={() => setShowAppQR(false)}
             >
               <Text style={styles.qrModalButtonText}>Close</Text>
             </TouchableOpacity>

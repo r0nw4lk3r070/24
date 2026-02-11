@@ -1,3 +1,6 @@
+// Polyfill for crypto.getRandomValues() — required by crypto-js in Hermes engine
+import 'react-native-get-random-values';
+
 // Polyfill for TextEncoder/TextDecoder (required by qrcode library)
 if (typeof global.TextEncoder === 'undefined') {
   global.TextEncoder = class TextEncoder {
@@ -29,6 +32,15 @@ if (typeof global.TextEncoder === 'undefined') {
     }
   };
 }
+
+import messaging from '@react-native-firebase/messaging';
+
+// Register background/quit-state FCM handler (MUST be in entry file, before registerRootComponent)
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  console.log('Background FCM message received:', remoteMessage);
+  // Android auto-displays the notification from the 'notification' payload
+  // Decryption happens when user opens the app
+});
 
 import { registerRootComponent } from 'expo';
 import App from './App';

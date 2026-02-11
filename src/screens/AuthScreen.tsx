@@ -8,7 +8,9 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Linking
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,6 +18,8 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 import { createUser, getUser } from '../services/authService';
 import { initializePresence } from '../services/presenceService';
+import { initializeGlobalContactListener, storeUserFCMToken } from '../services/contactSyncService';
+import { getFCMToken, onTokenRefresh, requestNotificationPermissions } from '../services/notificationService';
 import { User } from '../types';
 
 type AuthScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Auth'>;
@@ -26,9 +30,11 @@ const AuthScreen = () => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [creating, setCreating] = useState(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
 
   useEffect(() => {
     checkExistingUser();
+    loadFCMToken();
   }, []);
 
   const checkExistingUser = async () => {
@@ -44,6 +50,11 @@ const AuthScreen = () => {
     }
   };
 
+  const loadFCMToken = async () => {
+    const token = await getFCMToken();
+    setFcmToken(token);
+  };
+
   const handleCreateUser = async () => {
     if (!username.trim()) return;
     
@@ -51,6 +62,20 @@ const AuthScreen = () => {
     try {
       const user = await createUser(username.trim());
       setCurrentUser(user);
+
+      // Request notification permission and show setup info
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert(
+          'Enable Notifications',
+          'To receive messages when the app is closed, please enable notifications for Nalid24 in your device Settings.\n\n' +
+          'Go to: Settings → Apps → Nalid24 → Notifications → Enable',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Later', style: 'cancel' },
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error creating user:', error);
     } finally {
@@ -62,6 +87,15 @@ const AuthScreen = () => {
     if (currentUser) {
       // Initialize presence tracking
       initializePresence(currentUser.uniqueId);
+      // Start listening for incoming contact requests globally
+      initializeGlobalContactListener(currentUser.uniqueId);
+      // Store FCM token in Firebase so others can send us push notifications
+      storeUserFCMToken(currentUser.uniqueId);
+      // Listen for FCM token refresh and update Firebase when it changes
+      onTokenRefresh((newToken) => {
+        console.log('FCM token refreshed, updating Firebase...');
+        storeUserFCMToken(currentUser.uniqueId);
+      });
     }
     navigation.navigate('Contacts');
   };
@@ -90,7 +124,7 @@ const AuthScreen = () => {
             <View style={styles.qrSection}>
               <Text style={styles.qrLabel}>Your QR Code</Text>
               <Text style={styles.qrHint}>Share this with others to connect</Text>
-              <QRCodeDisplay uniqueId={currentUser.uniqueId} size={240} />
+              <QRCodeDisplay uniqueId={currentUser.uniqueId} username={currentUser.username} fcmToken={fcmToken} size={240} />
               <Text style={styles.userIdText}>ID: {currentUser.uniqueId.slice(0, 8)}...</Text>
             </View>
           </View>

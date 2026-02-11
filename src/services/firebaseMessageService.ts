@@ -1,6 +1,7 @@
 import database from '@react-native-firebase/database';
 import { Message } from '../types';
 import { encryptMessage, decryptMessage, generateSharedSecret } from './encryptionService';
+import { getDatabase } from './firebaseConfig';
 
 const MESSAGE_EXPIRATION_TIME = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -50,7 +51,7 @@ export const sendMessage = async (
       status: 'sent',
     };
     
-    await database()
+    await getDatabase()
       .ref(`chats/${chatId}/messages/${messageId}`)
       .set(messageData);
     
@@ -71,7 +72,7 @@ export const listenForMessages = (
   onMessageReceived: (message: Message) => void
 ): (() => void) => {
   const chatId = getChatId(myUserId, contactId);
-  const messagesRef = database().ref(`chats/${chatId}/messages`);
+  const messagesRef = getDatabase().ref(`chats/${chatId}/messages`);
   
   const listener = messagesRef.on('child_added', async (snapshot) => {
     try {
@@ -116,7 +117,7 @@ export const getMessages = async (
 ): Promise<Message[]> => {
   try {
     const chatId = getChatId(myUserId, contactId);
-    const snapshot = await database()
+    const snapshot = await getDatabase()
       .ref(`chats/${chatId}/messages`)
       .orderByChild('timestamp')
       .once('value');
@@ -138,7 +139,7 @@ export const getMessages = async (
       const messageAge = now - data.timestamp;
       if (messageAge > MESSAGE_EXPIRATION_TIME) {
         // Delete expired message
-        database().ref(`chats/${chatId}/messages/${messageId}`).remove();
+        getDatabase().ref(`chats/${chatId}/messages/${messageId}`).remove();
         return;
       }
       
@@ -183,7 +184,7 @@ export const cleanupOldMessages = async (
     const chatId = getChatId(myUserId, contactId);
     const cutoffTime = Date.now() - MESSAGE_EXPIRATION_TIME;
     
-    const snapshot = await database()
+    const snapshot = await getDatabase()
       .ref(`chats/${chatId}/messages`)
       .orderByChild('timestamp')
       .endAt(cutoffTime)
@@ -199,7 +200,7 @@ export const cleanupOldMessages = async (
       }
     });
     
-    await database().ref().update(updates);
+    await getDatabase().ref().update(updates);
     console.log(`Cleaned up ${Object.keys(updates).length} expired messages`);
   } catch (error) {
     console.error('Error cleaning up old messages:', error);
@@ -215,7 +216,7 @@ export const clearAllMessages = async (
 ): Promise<void> => {
   try {
     const chatId = getChatId(myUserId, contactId);
-    await database().ref(`chats/${chatId}/messages`).remove();
+    await getDatabase().ref(`chats/${chatId}/messages`).remove();
     console.log('All messages cleared from Firebase');
   } catch (error) {
     console.error('Error clearing messages from Firebase:', error);
@@ -234,7 +235,7 @@ export const markMessageAsDelivered = async (
 ): Promise<void> => {
   try {
     const chatId = getChatId(myUserId, contactId);
-    await database()
+    await getDatabase()
       .ref(`chats/${chatId}/messages/${messageId}`)
       .update({
         status: 'delivered',
@@ -259,12 +260,12 @@ export const markMessageAsRead = async (
     const chatId = getChatId(myUserId, contactId);
     
     // Add read receipt with user ID and timestamp
-    await database()
+    await getDatabase()
       .ref(`chats/${chatId}/messages/${messageId}/readBy/${myUserId}`)
       .set(database.ServerValue.TIMESTAMP);
     
     // Also update main message status
-    await database()
+    await getDatabase()
       .ref(`chats/${chatId}/messages/${messageId}`)
       .update({
         status: 'read',
@@ -289,7 +290,7 @@ export const markAllMessagesAsRead = async (
     const chatId = getChatId(myUserId, contactId);
     
     // Get all unread messages (sent by contact)
-    const snapshot = await database()
+    const snapshot = await getDatabase()
       .ref(`chats/${chatId}/messages`)
       .orderByChild('senderId')
       .equalTo(contactId)
@@ -313,7 +314,7 @@ export const markAllMessagesAsRead = async (
     });
     
     if (Object.keys(updates).length > 0) {
-      await database().ref().update(updates);
+      await getDatabase().ref().update(updates);
       console.log(`Marked ${Object.keys(updates).length / 3} messages as read`);
     }
   } catch (error) {
@@ -332,7 +333,7 @@ export const listenToMessageStatus = (
   onStatusUpdate: (status: MessageStatus, timestamp?: number) => void
 ): (() => void) => {
   const chatId = getChatId(myUserId, contactId);
-  const messageRef = database().ref(`chats/${chatId}/messages/${messageId}`);
+  const messageRef = getDatabase().ref(`chats/${chatId}/messages/${messageId}`);
   
   const listener = messageRef.on('value', (snapshot) => {
     const data = snapshot.val();
@@ -362,4 +363,36 @@ export default {
   markAllMessagesAsRead,
   listenToMessageStatus,
   getChatId,
+  listenForLastMessage,
+};
+
+/**
+ * Listen to the last message in a chat (for unread indicators on contacts screen)
+ * Returns senderId and timestamp of the most recent message
+ */
+export const listenForLastMessage = (
+  myUserId: string,
+  contactId: string,
+  onUpdate: (lastMessage: { senderId: string; timestamp: number } | null) => void
+): (() => void) => {
+  const chatId = getChatId(myUserId, contactId);
+  const messagesRef = getDatabase()
+    .ref(`chats/${chatId}/messages`)
+    .orderByChild('timestamp')
+    .limitToLast(1);
+
+  const listener = messagesRef.on('value', (snapshot) => {
+    if (!snapshot.exists()) {
+      onUpdate(null);
+      return;
+    }
+    snapshot.forEach((child) => {
+      const data = child.val();
+      if (data) {
+        onUpdate({ senderId: data.senderId, timestamp: data.timestamp });
+      }
+    });
+  });
+
+  return () => messagesRef.off('value', listener);
 };

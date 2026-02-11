@@ -13,11 +13,15 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import QRCodeDisplay from '../components/QRCodeDisplay';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUser, clearUserData } from '../services/authService';
-import { clearAllContacts } from '../services/contactService';
+import { clearAllContacts, getContacts } from '../services/contactService';
 import { clearAllMessagesGlobally } from '../services/messageService';
+import { clearAllMessages as clearFirebaseMessages } from '../services/firebaseMessageService';
 import { getFCMToken } from '../services/notificationService';
 import { cleanupPresence } from '../services/presenceService';
+import { cleanupGlobalContactListener } from '../services/contactSyncService';
+import { getDatabase } from '../services/firebaseConfig';
 import { User } from '../types';
 
 type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Profile'>;
@@ -27,7 +31,7 @@ const ProfileScreen = () => {
   const [user, setUser] = useState<User | null>(null);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
-  const [showAppQR, setShowAppQR] = useState(false);
+
 
   useEffect(() => {
     loadUser();
@@ -60,13 +64,33 @@ const ProfileScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await clearAllContacts();
-              await clearAllMessagesGlobally();
-              // Navigate back to force reload
-              navigation.navigate('Contacts');
-              setTimeout(() => {
-                Alert.alert('Success', 'All data cleared. Please restart the app for full effect.');
-              }, 500);
+              console.log('Starting clear data...');
+              // Clear Firebase messages for all contacts (best-effort)
+              if (user) {
+                try {
+                  const contacts = await getContacts();
+                  for (const contact of contacts) {
+                    try {
+                      await clearFirebaseMessages(user.uniqueId, contact.id);
+                    } catch (e) {
+                      console.warn('Error clearing Firebase chat with', contact.id, e);
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Error during Firebase cleanup:', e);
+                }
+              }
+              // Clear ALL local data except user account
+              try { await clearAllContacts(); } catch (e) { console.warn('Error clearing contacts:', e); }
+              try { await clearAllMessagesGlobally(); } catch (e) { console.warn('Error clearing messages:', e); }
+
+              console.log('All data cleared successfully');
+              // Reset navigation stack to force full UI refresh
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Contacts' }],
+              });
+              setTimeout(() => Alert.alert('Success', 'All data cleared.'), 300);
             } catch (error) {
               console.error('Clear data error:', error);
               Alert.alert('Error', 'Failed to clear data');
@@ -87,26 +111,67 @@ const ProfileScreen = () => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            console.log('Starting logout and account deletion...');
+
+            // 1. Cleanup Firebase data (best-effort, don't block logout)
             try {
-              console.log('Starting logout and account deletion...');
-              // Cleanup presence tracking
               if (user) {
                 await cleanupPresence();
               }
-              // Clear all data
-              await clearAllContacts();
-              await clearAllMessagesGlobally();
-              await clearUserData();
-              console.log('All data cleared, navigating to Auth...');
-              // Force navigate to Auth screen
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Auth' }],
-              });
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout: ' + error);
+            } catch (e) { console.warn('Presence cleanup error:', e); }
+
+            try {
+              if (user) {
+                await getDatabase().ref(`users/${user.uniqueId}`).remove();
+              }
+            } catch (e) { console.warn('Error removing user from Firebase:', e); }
+
+            try {
+              if (user) {
+                await getDatabase().ref(`presence/${user.uniqueId}`).remove();
+              }
+            } catch (e) { console.warn('Error removing presence from Firebase:', e); }
+
+            try {
+              if (user) {
+                await getDatabase().ref(`contactRequests/${user.uniqueId}`).remove();
+              }
+            } catch (e) { console.warn('Error removing contact requests:', e); }
+
+            try {
+              if (user) {
+                const contacts = await getContacts();
+                for (const contact of contacts) {
+                  try {
+                    await clearFirebaseMessages(user.uniqueId, contact.id);
+                  } catch (e) {
+                    console.warn('Error clearing Firebase chat:', e);
+                  }
+                }
+              }
+            } catch (e) { console.warn('Error clearing Firebase chats:', e); }
+
+            // 2. Cleanup listeners
+            try { cleanupGlobalContactListener(); } catch (e) { console.warn('Listener cleanup error:', e); }
+
+            // 3. Nuclear clear of ALL AsyncStorage (contacts, messages, user, FCM token, everything)
+            try {
+              await AsyncStorage.clear();
+              console.log('AsyncStorage completely cleared');
+            } catch (e) {
+              console.warn('AsyncStorage.clear() failed, trying individual clears:', e);
+              try { await clearAllContacts(); } catch (e2) { console.warn(e2); }
+              try { await clearAllMessagesGlobally(); } catch (e2) { console.warn(e2); }
+              try { await clearUserData(); } catch (e2) { console.warn(e2); }
             }
+
+            console.log('Logout complete, navigating to Auth...');
+
+            // 4. ALWAYS navigate to Auth - this is the critical action
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Auth' }],
+            });
           }
         }
       ]
@@ -205,7 +270,7 @@ const ProfileScreen = () => {
           <View style={styles.qrModalContent}>
             <Text style={styles.qrModalTitle}>My QR Code</Text>
             <Text style={styles.qrModalSubtitle}>{user.username}</Text>
-            <QRCodeDisplay uniqueId={user.uniqueId} fcmToken={fcmToken} size={240} />
+            <QRCodeDisplay uniqueId={user.uniqueId} username={user.username} fcmToken={fcmToken} size={240} />
             <Text style={styles.qrModalHint}>
               Share this code for others to add you
             </Text>
@@ -219,30 +284,7 @@ const ProfileScreen = () => {
         </View>
       </Modal>
 
-      {/* App Download QR Modal */}
-      <Modal
-        visible={showAppQR}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowAppQR(false)}
-      >
-        <View style={styles.qrModalOverlay}>
-          <View style={styles.qrModalContent}>
-            <Text style={styles.qrModalTitle}>📱 Download Nalid24</Text>
-            <Text style={styles.qrModalSubtitle}>Scan to install the app</Text>
-            <QRCodeDisplay uniqueId="https://nalid24-a7401.web.app" size={260} raw={true} />
-            <Text style={styles.qrModalHint}>
-              Anyone can scan this to download the app
-            </Text>
-            <TouchableOpacity
-              style={styles.qrModalButton}
-              onPress={() => setShowAppQR(false)}
-            >
-              <Text style={styles.qrModalButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -379,7 +421,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-export default ProfileScreen;
 
 export default ProfileScreen;

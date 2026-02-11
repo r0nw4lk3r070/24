@@ -1,5 +1,6 @@
 import database from '@react-native-firebase/database';
 import { AppState, AppStateStatus } from 'react-native';
+import { getDatabase } from './firebaseConfig';
 
 /**
  * Presence Service for Nalid24
@@ -24,8 +25,8 @@ export const initializePresence = (userId: string): void => {
   console.log('Initializing presence for user:', userId);
 
   // Set up presence in Firebase
-  const presenceRef = database().ref(`/presence/${userId}`);
-  const connectedRef = database().ref('.info/connected');
+  const presenceRef = getDatabase().ref(`/presence/${userId}`);
+  const connectedRef = getDatabase().ref('.info/connected');
 
   // Listen to connection state
   connectedRef.on('value', (snapshot) => {
@@ -58,7 +59,7 @@ export const initializePresence = (userId: string): void => {
 const handleAppStateChange = (nextAppState: AppStateStatus) => {
   if (!currentUserId) return;
 
-  const presenceRef = database().ref(`/presence/${currentUserId}`);
+  const presenceRef = getDatabase().ref(`/presence/${currentUserId}`);
 
   if (nextAppState === 'active') {
     // App came to foreground
@@ -85,7 +86,7 @@ export const getUserPresence = async (userId: string): Promise<{
   lastSeen: number;
 } | null> => {
   try {
-    const snapshot = await database().ref(`/presence/${userId}`).once('value');
+    const snapshot = await getDatabase().ref(`/presence/${userId}`).once('value');
     const data = snapshot.val();
 
     if (!data) return null;
@@ -107,7 +108,7 @@ export const listenToPresence = (
   userId: string,
   callback: (presence: { status: 'online' | 'offline'; lastSeen: number }) => void
 ): (() => void) => {
-  const presenceRef = database().ref(`/presence/${userId}`);
+  const presenceRef = getDatabase().ref(`/presence/${userId}`);
 
   const listener = presenceRef.on('value', (snapshot) => {
     const data = snapshot.val();
@@ -131,13 +132,13 @@ export const listenToPresence = (
  */
 export const setUserOffline = async (userId: string): Promise<void> => {
   try {
-    await database().ref(`/presence/${userId}`).set({
+    await getDatabase().ref(`/presence/${userId}`).set({
       status: 'offline',
       lastSeen: database.ServerValue.TIMESTAMP,
     });
 
     // Cancel any pending onDisconnect
-    await database().ref(`/presence/${userId}`).onDisconnect().cancel();
+    await getDatabase().ref(`/presence/${userId}`).onDisconnect().cancel();
 
     console.log('User set to offline:', userId);
   } catch (error) {
@@ -164,7 +165,7 @@ export const cleanupPresence = async (): Promise<void> => {
     }
 
     // Remove connection listener
-    const connectedRef = database().ref('.info/connected');
+    const connectedRef = getDatabase().ref('.info/connected');
     connectedRef.off('value');
 
     currentUserId = null;

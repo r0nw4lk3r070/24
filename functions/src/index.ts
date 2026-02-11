@@ -7,7 +7,7 @@
  * - Online/offline status tracking
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
@@ -39,30 +39,19 @@ export const sendMessageNotification = functions.database
         messageId,
         senderId: message.senderId,
         recipientId,
-        hasContent: !!message.content,
+        hasContent: !!message.encryptedContent,
       });
 
-      // Get recipient's FCM token from contacts
-      // We need to search all contacts to find the one with matching userId
-      const contactsSnapshot = await admin.database()
-        .ref("/contacts")
-        .orderByChild("userId")
-        .equalTo(recipientId)
-        .limitToFirst(1)
+      // Look up recipient's FCM token from /users/{recipientId}
+      const recipientSnapshot = await admin.database()
+        .ref(`/users/${recipientId}`)
         .once("value");
 
-      let fcmToken: string | null = null;
-
-      contactsSnapshot.forEach((contact) => {
-        const contactData = contact.val();
-        if (contactData.fcmToken) {
-          fcmToken = contactData.fcmToken;
-        }
-      });
+      const recipientData = recipientSnapshot.val();
+      const fcmToken: string | null = recipientData?.fcmToken || null;
 
       if (!fcmToken) {
         console.log("No FCM token found for recipient:", recipientId);
-        // Update message status to "sent" (delivered but no notification)
         await snapshot.ref.update({
           status: "sent",
           updatedAt: admin.database.ServerValue.TIMESTAMP,
@@ -70,18 +59,20 @@ export const sendMessageNotification = functions.database
         return null;
       }
 
-      // Get sender's username for notification
-      const senderUsername = message.senderUsername || "Someone";
+      // Look up sender's username from /users/{senderId}
+      const senderSnapshot = await admin.database()
+        .ref(`/users/${message.senderId}`)
+        .once("value");
 
-      // Send FCM notification
-      const payload: admin.messaging.MessagingPayload = {
+      const senderData = senderSnapshot.val();
+      const senderUsername = senderData?.username || "Someone";
+
+      // Send FCM notification via v1 API (don't include message content — it's encrypted)
+      await admin.messaging().send({
+        token: fcmToken,
         notification: {
           title: senderUsername,
-          body: message.isEmoji ? 
-            "Sent an emoji" : 
-            (message.content || "New message"),
-          sound: "default",
-          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+          body: "New encrypted message",
         },
         data: {
           chatId: chatId,
@@ -89,9 +80,14 @@ export const sendMessageNotification = functions.database
           senderId: message.senderId,
           type: "message",
         },
-      };
-
-      await admin.messaging().sendToDevice(fcmToken, payload);
+        android: {
+          priority: "high",
+          notification: {
+            sound: "default",
+            channelId: "default",
+          },
+        },
+      });
 
       console.log("Notification sent successfully to:", recipientId);
 

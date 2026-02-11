@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -17,7 +17,9 @@ import QRCodeDisplay from '../components/QRCodeDisplay';
 import { getContacts, addContact, removeContact, Contact } from '../services/contactService';
 import { getUser } from '../services/authService';
 import { getFCMToken } from '../services/notificationService';
-import { sendContactRequest, listenForContactRequests } from '../services/contactSyncService';
+import { sendContactRequest } from '../services/contactSyncService';
+import { listenForLastMessage } from '../services/firebaseMessageService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ContactsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Contacts'>;
 
@@ -30,21 +32,74 @@ const ContactsScreen = () => {
   const [myUsername, setMyUsername] = useState<string>('');
   const [myFcmToken, setMyFcmToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Track unread messages per contact: { contactId: { hasUnread: boolean, timestamp: number } }
+  const [unreadMap, setUnreadMap] = useState<Record<string, boolean>>({});
+  const lastMessageCleanups = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     loadData();
     loadFCMToken();
+  }, [myUserId]);
 
-    // Set up listener for incoming contact requests
-    let cleanup: (() => void) | undefined;
-    if (myUserId) {
-      cleanup = listenForContactRequests(myUserId);
-    }
+  // Refresh contacts list whenever the screen comes into focus
+  // (e.g., contact auto-added via global listener while on ChatScreen)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadData();
+      // Refresh unread status when returning from a chat
+      if (myUserId && contacts.length > 0) {
+        checkUnreadMessages(contacts);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, myUserId, contacts]);
+
+  // Set up real-time listeners for last message in each chat
+  useEffect(() => {
+    if (!myUserId || contacts.length === 0) return;
+
+    // Clean up previous listeners
+    lastMessageCleanups.current.forEach(fn => fn());
+    lastMessageCleanups.current = [];
+
+    contacts.forEach((contact) => {
+      const cleanup = listenForLastMessage(myUserId, contact.id, async (lastMsg) => {
+        if (!lastMsg) return;
+        // Only show unread if the message is from the contact (not from me)
+        if (lastMsg.senderId === myUserId) return;
+        const lastReadKey = `@Nalid24:LastRead:${contact.id}`;
+        const lastReadStr = await AsyncStorage.getItem(lastReadKey);
+        const lastRead = lastReadStr ? parseInt(lastReadStr, 10) : 0;
+        const hasUnread = lastMsg.timestamp > lastRead;
+        setUnreadMap(prev => {
+          if (prev[contact.id] === hasUnread) return prev;
+          return { ...prev, [contact.id]: hasUnread };
+        });
+      });
+      lastMessageCleanups.current.push(cleanup);
+    });
 
     return () => {
-      if (cleanup) cleanup();
+      lastMessageCleanups.current.forEach(fn => fn());
+      lastMessageCleanups.current = [];
     };
-  }, [myUserId]);
+  }, [myUserId, contacts.length]);
+
+  // Check unread messages for all contacts
+  const checkUnreadMessages = async (contactsList: Contact[]) => {
+    // This runs on focus to update badges after reading a chat
+    const newUnreadMap: Record<string, boolean> = {};
+    for (const contact of contactsList) {
+      // We rely on the real-time listener to set the correct state,
+      // but we can still force a re-check of lastRead here
+      const lastReadKey = `@Nalid24:LastRead:${contact.id}`;
+      const lastReadStr = await AsyncStorage.getItem(lastReadKey);
+      if (lastReadStr) {
+        // Listener will handle the comparison; just trigger re-evaluation
+        newUnreadMap[contact.id] = unreadMap[contact.id] || false;
+      }
+    }
+  };
 
   const loadFCMToken = async () => {
     const token = await getFCMToken();
@@ -141,7 +196,12 @@ const ContactsScreen = () => {
     );
   };
 
-  const handleContactPress = (contact: Contact) => {
+  const handleContactPress = async (contact: Contact) => {
+    // Mark as read: save current timestamp before navigating to chat
+    const lastReadKey = `@Nalid24:LastRead:${contact.id}`;
+    await AsyncStorage.setItem(lastReadKey, Date.now().toString());
+    // Clear unread indicator immediately
+    setUnreadMap(prev => ({ ...prev, [contact.id]: false }));
     navigation.navigate('Chat', {
       contactId: contact.id,
       contactName: contact.username
@@ -161,8 +221,15 @@ const ContactsScreen = () => {
       </View>
       <View style={styles.contactInfo}>
         <Text style={styles.contactName}>{item.username}</Text>
-        <Text style={styles.contactId}>ID: {item.id.slice(0, 8)}...</Text>
+        {unreadMap[item.id] ? (
+          <Text style={styles.unreadText}>New message</Text>
+        ) : (
+          <Text style={styles.contactId}>ID: {item.id.slice(0, 8)}...</Text>
+        )}
       </View>
+      {unreadMap[item.id] && (
+        <View style={styles.unreadBadge} />
+      )}
       <View style={styles.contactArrow}>
         <Text style={styles.arrowText}>›</Text>
       </View>
@@ -241,7 +308,7 @@ const ContactsScreen = () => {
             <Text style={styles.qrModalTitle}>My QR Code</Text>
             <Text style={styles.qrModalSubtitle}>{myUsername}</Text>
             {myUserId ? (
-              <QRCodeDisplay uniqueId={myUserId} fcmToken={myFcmToken} size={240} />
+              <QRCodeDisplay uniqueId={myUserId} username={myUsername} fcmToken={myFcmToken} size={240} />
             ) : null}
             <Text style={styles.qrModalHint}>
               Let others scan this to add you
@@ -336,6 +403,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontFamily: 'monospace',
+  },
+  unreadText: {
+    fontSize: 13,
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  unreadBadge: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#2196F3',
+    marginRight: 4,
   },
   contactArrow: {
     marginLeft: 8,

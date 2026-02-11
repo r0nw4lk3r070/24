@@ -1,0 +1,38 @@
+{
+  "rules": {
+    "chats": {
+      "$chatId": {
+        ".read": true,
+        ".write": true,
+        "messages": {
+          "$messageId": {
+            ".validate": "newData.hasChildren(['encryptedContent', 'senderId', 'timestamp'])"
+          }
+        }
+      }
+    },
+    "contactRequests": {
+      "$targetUserId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "presence": {
+      "$userId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "users": {
+      "$userId": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['userId', 'username'])"
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

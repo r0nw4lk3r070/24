@@ -13,10 +13,11 @@ import {
 } from 'react-native';
 import { RouteProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { sendMessage, getMessages, listenForMessages, markAllMessagesAsRead, markMessageAsDelivered } from '../services/firebaseMessageService';
+import { sendMessage, getMessages, listenForMessages, markAllMessagesAsRead, markMessageAsDelivered, clearAllMessages as clearFirebaseMessages } from '../services/firebaseMessageService';
 import { getUser } from '../services/authService';
 import { listenToPresence, formatLastSeen } from '../services/presenceService';
 import { Message } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, 'Chat'>;
 
@@ -47,17 +48,23 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ route }) => {
     // Load initial messages
     loadMessages();
     
-    // Mark all messages as read
+    // Mark all messages as read (Firebase status)
     markAllMessagesAsRead(myUserId, contactId);
+    
+    // Mark as read locally for unread badge on Contacts screen
+    const lastReadKey = `@Nalid24:LastRead:${contactId}`;
+    AsyncStorage.setItem(lastReadKey, Date.now().toString());
     
     // Set up real-time listener for new messages
     console.log('Setting up real-time listener for chat:', contactId);
     const unsubscribe = listenForMessages(myUserId, contactId, (newMessage) => {
       console.log('New message received:', newMessage.id);
       
-      // If it's not my message, mark as delivered
+      // If it's not my message, mark as delivered and update lastRead
       if (newMessage.senderId !== myUserId) {
         markMessageAsDelivered(myUserId, contactId, newMessage.id);
+        // Keep lastRead updated while chat is open
+        AsyncStorage.setItem(`@Nalid24:LastRead:${contactId}`, Date.now().toString());
       }
       
       setMessages((prevMessages) => {
@@ -111,9 +118,13 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ route }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Import the delete function
+              // Clear from local storage
               const { clearMessagesForContact } = await import('../services/messageService');
               await clearMessagesForContact(contactId);
+              // Clear from Firebase
+              if (myUserId) {
+                await clearFirebaseMessages(myUserId, contactId);
+              }
               setMessages([]);
               Alert.alert('Success', 'Chat deleted');
               navigation.goBack();
